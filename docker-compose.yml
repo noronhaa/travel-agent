@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./briefs:/app/briefs
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Travel Research Agent</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>✈️ Travel Research Agent</h1>
+    <span class="tagline">AI-powered travel briefs in minutes</span>
+  </div>
+</header>
+
+<main>
+<div class="container">
+
+  <div style="padding-top: 36px;">
+    <div class="card">
+      <form id="travel-form">
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="destination">Destination <span class="req">*</span></label>
+            <input type="text" id="destination" name="destination" placeholder="e.g. Bali, Indonesia" required>
+          </div>
+
+          <div class="form-group">
+            <label for="traveling_from">Travelling From <span class="opt">(optional)</span></label>
+            <input type="text" id="traveling_from" name="traveling_from" placeholder="e.g. London, UK">
+            <span class="hint">Include for transport options &amp; costs</span>
+          </div>
+
+          <!-- Date / Month toggle -->
+          <div class="form-group full">
+            <label>When are you travelling? <span class="req">*</span></label>
+            <div class="toggle-row">
+              <button type="button" class="toggle-btn active" id="mode-month">Month</button>
+              <button type="button" class="toggle-btn" id="mode-dates">Specific Dates</button>
+              <span class="hint" id="date-mode-hint" style="margin-left:auto; align-self:center">
+                Month gives typical weather &amp; average prices
+              </span>
+            </div>
+
+            <!-- Month picker -->
+            <div id="month-picker-wrap">
+              <input type="month" id="month-input" name="month"
+                     min="2025-01" max="2035-12"
+                     placeholder="e.g. 2026-09">
+            </div>
+
+            <!-- Date range picker -->
+            <div id="date-range-wrap" style="display:none">
+              <div class="date-range-row">
+                <div class="form-group" style="margin:0">
+                  <label for="date_from" style="font-size:0.75rem">From</label>
+                  <input type="date" id="date_from" name="date_from">
+                </div>
+                <div class="date-range-arrow">→</div>
+                <div class="form-group" style="margin:0">
+                  <label for="date_to" style="font-size:0.75rem">To</label>
+                  <input type="date" id="date_to" name="date_to">
+                </div>
+                <div class="form-group" style="margin:0; min-width:120px">
+                  <label style="font-size:0.75rem">Duration</label>
+                  <div id="duration-auto" class="duration-display">—</div>
+                </div>
+              </div>
+              <span class="hint" id="forecast-hint" style="display:none; color:var(--success)">
+                ✓ Within 16 days — actual weather forecast will be included
+              </span>
+            </div>
+          </div>
+
+          <!-- Duration (shown only in month mode) -->
+          <div class="form-group full" id="duration-wrap">
+            <label for="duration">Duration <span class="req">*</span></label>
+            <input type="text" id="duration" name="duration" placeholder="e.g. 10 days, 2 weeks">
+          </div>
+
+          <div class="form-group full">
+            <label for="interests">Interests <span class="opt">(optional)</span></label>
+            <input type="text" id="interests" name="interests"
+                   placeholder="e.g. surf, yoga, hiking, food, culture, diving">
+            <span class="hint">Comma-separated — each gets its own dedicated section</span>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit-btn">
+          🔍 Research &amp; Generate Brief
+        </button>
+      </form>
+
+      <div id="status">
+        <div class="spinner"></div>
+        <div>
+          <div id="status-text">Starting research…</div>
+          <div class="steps" id="steps" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="result">
+    <div class="result-header">
+      <h2 style="font-size:1.1rem; color:var(--success);">✓ Brief ready</h2>
+      <div class="result-actions">
+        <button class="btn btn-sm" id="copy-btn">📋 Copy Markdown</button>
+        <a id="raw-link" class="btn btn-sm" target="_blank">⬇ Download .md</a>
+      </div>
+    </div>
+    <div class="brief-content" id="brief-html"></div>
+  </div>
+
+  {% if briefs %}
+  <div class="briefs-section">
+    <h2>Past Briefs</h2>
+    <div class="briefs-list">
+      {% for b in briefs %}
+      <div class="brief-item">
+        <div class="brief-item-info">
+          <span class="brief-item-title">{{ b.destination }}{% if b.period %} — {{ b.period }}{% endif %}{% if b.duration %}, {{ b.duration }}{% endif %}</span>
+          <span class="brief-item-meta">{{ b.generated_at[:10] if b.generated_at else b.filename }}</span>
+        </div>
+        <a href="/brief/{{ b.filename }}" class="btn btn-sm">View</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+</main>
+
+<script>
+// ── Date mode toggle ──────────────────────────────────────────
+const modeMonth = document.getElementById("mode-month");
+const modeDates = document.getElementById("mode-dates");
+const monthWrap  = document.getElementById("month-picker-wrap");
+const dateWrap   = document.getElementById("date-range-wrap");
+const durationWrap = document.getElementById("duration-wrap");
+const durationInput = document.getElementById("duration");
+const durationAuto  = document.getElementById("duration-auto");
+const forecastHint  = document.getElementById("forecast-hint");
+const dateHint      = document.getElementById("date-mode-hint");
+
+let dateMode = "month"; // "month" | "dates"
+
+function setMode(mode) {
+  dateMode = mode;
+  if (mode === "month") {
+    modeMonth.classList.add("active");
+    modeDates.classList.remove("active");
+    monthWrap.style.display = "";
+    dateWrap.style.display  = "none";
+    durationWrap.style.display = "";
+    dateHint.textContent = "Month gives typical weather & average prices";
+    document.getElementById("month-input").required = true;
+    durationInput.required = true;
+  } else {
+    modeDates.classList.add("active");
+    modeMonth.classList.remove("active");
+    monthWrap.style.display = "none";
+    dateWrap.style.display  = "";
+    durationWrap.style.display = "none";
+    dateHint.textContent = "Specific dates enable accurate transport & hotel prices";
+    document.getElementById("month-input").required = false;
+    durationInput.required = false;
+    updateDateRange();
+  }
+}
+
+modeMonth.addEventListener("click", () => setMode("month"));
+modeDates.addEventListener("click", () => setMode("dates"));
+
+function updateDateRange() {
+  const from = document.getElementById("date_from").value;
+  const to   = document.getElementById("date_to").value;
+  if (!from || !to) { durationAuto.textContent = "—"; forecastHint.style.display = "none"; return; }
+
+  const d1 = new Date(from), d2 = new Date(to);
+  if (d2 <= d1) { durationAuto.textContent = "Invalid"; forecastHint.style.display = "none"; return; }
+
+  const nights = Math.round((d2 - d1) / 86400000);
+  durationAuto.textContent = nights + (nights === 1 ? " night" : " nights");
+
+  const today = new Date();
+  const daysUntil = Math.round((d1 - today) / 86400000);
+  if (daysUntil >= 0 && daysUntil <= 16) {
+    forecastHint.style.display = "";
+  } else {
+    forecastHint.style.display = "none";
+  }
+}
+
+document.getElementById("date_from").addEventListener("change", updateDateRange);
+document.getElementById("date_to").addEventListener("change", updateDateRange);
+
+// Set sensible min dates
+const todayStr = new Date().toISOString().split("T")[0];
+document.getElementById("date_from").min = todayStr;
+document.getElementById("date_to").min   = todayStr;
+document.getElementById("date_from").addEventListener("change", function() {
+  document.getElementById("date_to").min = this.value;
+});
+
+// ── Progress steps ────────────────────────────────────────────
+const BASE_STEPS = [
+  "Searching top things to do…",
+  "Researching accommodation costs…",
+  "Looking up local prices & currency…",
+];
+const INTEREST_STEP = "Researching your interests…";
+const TRANSPORT_STEP = "Finding transport options…";
+const FINAL_STEPS = ["Compiling research…", "Writing your travel brief…"];
+
+let stepInterval, currentStep = 0;
+let allSteps = [];
+
+function buildSteps(interests, hasOrigin) {
+  allSteps = [...BASE_STEPS];
+  if (interests) allSteps.push(INTEREST_STEP);
+  if (hasOrigin) allSteps.push(TRANSPORT_STEP);
+  allSteps.push(...FINAL_STEPS);
+}
+
+function startSteps() {
+  const stepsEl = document.getElementById("steps");
+  const statusText = document.getElementById("status-text");
+  currentStep = 0;
+
+  function tick() {
+    if (currentStep < allSteps.length) {
+      statusText.textContent = allSteps[currentStep];
+      stepsEl.innerHTML = allSteps.slice(0, currentStep + 1)
+        .map((s, i) => {
+          const label = s.replace("…", "");
+          return `<span class="step ${i < currentStep ? 'done' : 'active'}">${i < currentStep ? '✓' : '…'} ${label}</span>`;
+        }).join("");
+      currentStep++;
+      const delay = currentStep < allSteps.length - 1 ? 8000 : 5000;
+      stepInterval = setTimeout(tick, delay);
+    }
+  }
+  tick();
+}
+
+function stopSteps() { clearTimeout(stepInterval); }
+
+// ── Form submit ───────────────────────────────────────────────
+document.getElementById("travel-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const btn       = document.getElementById("submit-btn");
+  const statusEl  = document.getElementById("status");
+  const resultEl  = document.getElementById("result");
+  const interests = document.getElementById("interests").value.trim();
+  const origin    = document.getElementById("traveling_from").value.trim();
+
+  let payload = {
+    destination:    document.getElementById("destination").value.trim(),
+    traveling_from: origin,
+    interests:      interests,
+  };
+
+  if (dateMode === "month") {
+    const monthVal = document.getElementById("month-input").value; // "YYYY-MM"
+    if (!monthVal) { alert("Please select a travel month."); return; }
+    // Convert "2026-09" → "September 2026"
+    const [y, m] = monthVal.split("-");
+    const monthName = new Date(+y, +m - 1, 1).toLocaleString("en-GB", { month: "long" });
+    payload.month    = `${monthName} ${y}`;
+    payload.duration = document.getElementById("duration").value.trim();
+    if (!payload.duration) { alert("Please enter a duration."); return; }
+  } else {
+    const dateFrom = document.getElementById("date_from").value;
+    const dateTo   = document.getElementById("date_to").value;
+    if (!dateFrom || !dateTo) { alert("Please select both a start and end date."); return; }
+    if (new Date(dateTo) <= new Date(dateFrom)) { alert("End date must be after start date."); return; }
+    const nights = Math.round((new Date(dateTo) - new Date(dateFrom)) / 86400000);
+    payload.date_from = dateFrom;
+    payload.date_to   = dateTo;
+    payload.duration  = `${nights} night${nights === 1 ? "" : "s"}`;
+    // also pass a month label for search queries
+    payload.month = "";
+  }
+
+  buildSteps(interests, origin);
+  btn.disabled = true;
+  statusEl.className = "loading";
+  statusEl.style.display = "flex";
+  resultEl.style.display = "none";
+  startSteps();
+
+  try {
+    const resp = await fetch("/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await resp.json();
+    stopSteps();
+
+    if (!resp.ok) {
+      statusEl.className = "error";
+      statusEl.innerHTML = `<strong>Error:</strong> ${data.error || "Something went wrong"}`;
+      return;
+    }
+
+    statusEl.style.display = "none";
+    document.getElementById("brief-html").innerHTML = data.html;
+    document.getElementById("raw-link").href = `/brief/${data.filename}/raw`;
+    resultEl.style.display = "block";
+    resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("copy-btn")._md = data.markdown;
+
+  } catch (err) {
+    stopSteps();
+    statusEl.className = "error";
+    statusEl.innerHTML = `<strong>Error:</strong> ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("copy-btn").addEventListener("click", function () {
+  const mdText = this._md;
+  if (!mdText) return;
+  navigator.clipboard.writeText(mdText).then(() => {
+    const orig = this.textContent;
+    this.textContent = "✓ Copied!";
+    setTimeout(() => { this.textContent = orig; }, 2000);
+  });
+});
+</script>
+
+</body>
+</html>

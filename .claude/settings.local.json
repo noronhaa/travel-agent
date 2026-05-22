@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 *)",
+      "Bash(curl -s http://localhost:5000/)",
+      "Bash(sudo lsof *)",
+      "Bash(pkill -f \"python3 app.py\")",
+      "Bash(curl -s http://localhost:5001/)",
+      "Bash(kill 94139)"
+    ]
+  }
+}

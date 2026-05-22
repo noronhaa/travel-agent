@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ meta.get('destination', 'Travel Brief') }} — Travel Brief</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>✈️ Travel Research Agent</h1>
+    <span class="tagline">AI-powered travel briefs in minutes</span>
+  </div>
+</header>
+
+<main>
+<div class="container brief-page">
+
+  <a href="/" class="back-link">← Back to new research</a>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+    <div>
+      {% if meta %}
+      <div style="font-size:0.8rem; color:var(--text-muted);">
+        {{ meta.get('destination', '') }}{% if meta.get('month') %} · {{ meta.get('month') }}{% endif %}{% if meta.get('duration') %} · {{ meta.get('duration') }}{% endif %}{% if meta.get('traveling_from') %} · from {{ meta.get('traveling_from') }}{% endif %}
+        {% if meta.get('generated_at') %} · Generated {{ meta.get('generated_at', '')[:10] }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-sm" id="copy-btn">📋 Copy Markdown</button>
+      <a href="/brief/{{ filename }}/raw" class="btn btn-sm" target="_blank">⬇ Download .md</a>
+    </div>
+  </div>
+
+  <div class="brief-content" id="brief-content">
+    {{ html | safe }}
+  </div>
+
+</div>
+</main>
+
+<script>
+document.getElementById("copy-btn").addEventListener("click", async function () {
+  const resp = await fetch("/brief/{{ filename }}/raw");
+  const text = await resp.text();
+  // Strip meta comment
+  const clean = text.replace(/^<!--[\s\S]*?-->\n\n/, "");
+  navigator.clipboard.writeText(clean).then(() => {
+    const orig = this.textContent;
+    this.textContent = "✓ Copied!";
+    setTimeout(() => { this.textContent = orig; }, 2000);
+  });
+});
+</script>
+
+</body>
+</html>
